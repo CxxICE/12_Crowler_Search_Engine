@@ -101,9 +101,13 @@ void Crowler::parseOnePage(std::string url, int depth)
 			while (it != it_end)
 			{
 				std::string link = *it++;
-				if (it == it_end) break;
-				std::string description = *it++;
-				if (!link.empty() && link.front() != '#')
+				//if (it == it_end) break;
+				auto posPart = link.find('#');
+				if (std::string::npos != posPart)
+				{
+					link.erase(posPart);
+				}
+				if (!link.empty())
 				{
 					if (link.substr(0, 4) == "http")//абсолютная ссылка
 					{
