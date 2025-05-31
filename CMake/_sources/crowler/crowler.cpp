@@ -71,7 +71,7 @@ void Crowler::parseOnePage(std::string url, int depth)
 		std::string scheme = urlView.scheme();
 		std::string host = boost::locale::to_lower(urlView.host(), loc);
 
-		std::string page = getHtmlContent(url);		
+		std::string page = getHtmlContent(url, depth);
 		if (page.empty())
 		{
 			wTh = _working.fetch_sub(1);
@@ -234,7 +234,7 @@ void Crowler::parseOnePage(std::string url, int depth)
 	return;
 }
 
-std::string Crowler::getHtmlContent(std::string_view url)
+std::string Crowler::getHtmlContent(std::string_view url, int depth)
 {
 	std::string result;
 	try
@@ -270,18 +270,25 @@ std::string Crowler::getHtmlContent(std::string_view url)
 			
 			tcp::resolver resolver(ioc);
 			auto resolved = resolver.resolve(host, scheme);
+			
 			beast::get_lowest_layer(stream).connect(resolved);
+			
 			beast::get_lowest_layer(stream).expires_after(std::chrono::seconds(30));
-						
+			
 			http::request<http::empty_body> req{ http::verb::get, path, 11 };
 			req.set(http::field::host, host);
 			req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 						
 			stream.handshake(ssl::stream_base::client);
+			
 			http::write(stream, req);
-			http::read(stream, buffer, res);			
+			
+			http::read(stream, buffer, res);
+			
 			get_lowest_layer(stream).cancel();
+			
 			stream.shutdown(ec);		
+			
 		}
 		else
 		{
@@ -301,7 +308,7 @@ std::string Crowler::getHtmlContent(std::string_view url)
 			stream.socket().shutdown(tcp::socket::shutdown_both, ec);			
 		}
 		
-		result = httpCodeHandle(url, res);
+		result = httpCodeHandle(url, res, depth);
 				
 		if (scheme == "https")
 		{
@@ -353,7 +360,8 @@ std::string Crowler::getHtmlContent(std::string_view url)
 
 std::string Crowler::httpCodeHandle(
 	std::string_view url,
-	const http::response<http::dynamic_body> &res)
+	const http::response<http::dynamic_body> &res, 
+	int depth)
 {
 	int code = res.base().result_int();
 	std::string result;
@@ -362,7 +370,7 @@ std::string Crowler::httpCodeHandle(
 	case 200://только этот код будет парситься
 #ifdef CROWLER_COUT
 		_m.lock();
-		std::cout << "\x1B[32m" << "\nCode 200\n" << url << "\x1B[0m\n";
+		std::cout << "\x1B[32m" << "\nid = " << std::this_thread::get_id() << ". Code 200\n" << url << "\x1B[0m\n";
 		_m.unlock();
 #endif	
 		result = getTextFromResponse(url, res);
@@ -370,47 +378,52 @@ std::string Crowler::httpCodeHandle(
 	case 300:
 #ifdef CROWLER_COUT
 		_m.lock();
-		std::cout << "\x1B[35m" << "\nCode 300. Redirect from:\n" << url << "\x1B[0m\n";
+		std::cout << "\x1B[35m" << "\nid = " << std::this_thread::get_id() << ". Code 300. Redirect from:\n" << url << "\x1B[0m\n";
 		_m.unlock();
-#endif
-		result = getHtmlContent(res.base()["Location"]);
+#endif	
+		if (depth >1) _pool.submit(std::bind(&Crowler::parseOnePage, this, std::string(res.base()["Location"]), depth - 1));
+		result = "";
 		break;
 	case 301:
 #ifdef CROWLER_COUT
 		_m.lock();
-		std::cout << "\x1B[35m" << "\nCode 301. Redirect from:\n" << url << "\x1B[0m\n";
+		std::cout << "\x1B[35m" << "\nid = " << std::this_thread::get_id() << ". Code 301. Redirect from:\n" << url << "\x1B[0m\n";
 		_m.unlock();
 #endif
-		result = getHtmlContent(res.base()["Location"]);
+		if (depth > 1) _pool.submit(std::bind(&Crowler::parseOnePage, this, std::string(res.base()["Location"]), depth - 1));
+		result = "";
 		break;
 	case 302:
 #ifdef CROWLER_COUT
 		_m.lock();
-		std::cout << "\x1B[35m" << "\nCode 302. Redirect from:\n" << url << "\x1B[0m\n";
+		std::cout << "\x1B[35m" << "\nid = " << std::this_thread::get_id() << ". Code 302. Redirect from:\n" << url << "\x1B[0m\n";
 		_m.unlock();
 #endif
-		result = getHtmlContent(res.base()["Location"]);
+		if (depth > 1) _pool.submit(std::bind(&Crowler::parseOnePage, this, std::string(res.base()["Location"]), depth - 1));
+		result = "";
 		break;
 	case 303:
 #ifdef CROWLER_COUT
 		_m.lock();
-		std::cout << "\x1B[35m" << "\nCode 303. Redirect from:\n" << url << "\x1B[0m\n";
+		std::cout << "\x1B[35m" << "\nid = " << std::this_thread::get_id() << ". Code 303. Redirect from:\n" << url << "\x1B[0m\n";
 		_m.unlock();
 #endif
-		result = getHtmlContent(res.base()["Location"]);
+		if (depth > 1) _pool.submit(std::bind(&Crowler::parseOnePage, this, std::string(res.base()["Location"]), depth - 1));
+		result = "";
 		break;
 	case 307:
 #ifdef CROWLER_COUT
 		_m.lock();
-		std::cout << "\x1B[35m" << "\nCode 307. Redirect from:\n" << url << "\x1B[0m\n";
+		std::cout << "\x1B[35m" << "\nid = " << std::this_thread::get_id() << ". Code 307. Redirect from:\n" << url << "\x1B[0m\n";
 		_m.unlock();
 #endif
-		result = getHtmlContent(res.base()["Location"]);
+		if (depth > 1) _pool.submit(std::bind(&Crowler::parseOnePage, this, std::string(res.base()["Location"]), depth - 1));
+		result = "";
 		break;
 	default:
 #ifdef CROWLER_COUT
 		_m.lock();
-		std::cout << "\x1B[33m" << "\nUnexpected code " << code << "\n" << url << "\x1B[0m\n";
+		std::cout << "\x1B[33m" << "\nid = " << std::this_thread::get_id() << ". Unexpected code " << code << "\n" << url << "\x1B[0m\n";
 		_m.unlock();
 #endif			
 		break;

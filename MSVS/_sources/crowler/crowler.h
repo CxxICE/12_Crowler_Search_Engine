@@ -52,11 +52,12 @@ public:
 
 private:
 	void parseOnePage(std::string url, int depth);
-	std::string getHtmlContent(std::string_view url);
+	std::string getHtmlContent(std::string_view url, int depth);
 	bool notContainNull(const boost::beast::multi_buffer::const_buffers_type &b);
 	std::string httpCodeHandle(
 		std::string_view url,
-		const http::response<http::dynamic_body> &res);
+		const http::response<http::dynamic_body> &res,
+		int depth);
 	std::string getTextFromResponse(
 		std::string_view url,
 		const http::response<http::dynamic_body> &res);
